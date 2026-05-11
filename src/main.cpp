@@ -12,7 +12,7 @@
 // ==========================================
 
 // --- COMMON CONFIGURATION ---
-#define VERSION      "1.0.0"
+#define VERSION      "1.0.7"
 #define JSON_URL "https://raw.githubusercontent.com/segestic/OTA-Demo/main/manifest.json"
 
 // Safe execution flag. NEVER run heavy code inside network/radio callbacks.
@@ -114,6 +114,36 @@ void executeOtaPull() {
     #endif
 
     // 3. Execute OTA
+    
+    // 1. Create a dynamic URL with a random timestamp to bypass GitHub's Cache!
+    String live_url = String(JSON_URL) + "?v=" + String(millis());
+
+    // --- TEMPORARY DEBUG BLOCK ---
+    Serial.println("\n[DEBUG] Fetching FRESH JSON (Cache Busted)...");
+    HTTPClient http;
+    http.begin(live_url); // Use the live URL
+    int httpCode = http.GET();
+    if(httpCode == 200) {
+        String payload = http.getString();
+        Serial.println("--- START OF DOWNLOADED PAYLOAD ---");
+        Serial.println(payload);
+        Serial.println("--- END OF DOWNLOADED PAYLOAD ---");
+    } else {
+        Serial.printf("[DEBUG] HTTP GET Failed with code: %d\n", httpCode);
+    }
+    http.end();
+    // -----------------------------
+
+    // 2. Execute OTA Pull using the Cache-Busted URL
+    // 1. Create a dynamic URL to bypass GitHub's Cache
+    String live_url = String(JSON_URL) + "?v=" + String(millis());
+
+    // 2. DYNAMICALLY detect the physical Flash Size!
+    uint32_t flashSizeMB = ESP.getFlashChipSize() / (1024 * 1024);
+    String detectedConfig = String(flashSizeMB) + "MB";
+    Serial.printf("[SYSTEM] Detected Hardware: ESP32_DEV with %s Flash\n", detectedConfig.c_str());
+
+    // 3. Execute OTA Pull
     ESP32OTAPull ota;
     int ret = ota
         .SetCallback([](int offset, int totallength) {
@@ -124,7 +154,10 @@ void executeOtaPull() {
                 lastPercent = percent;
             }
         })
-        .CheckForOTAUpdate(JSON_URL, VERSION);
+        .OverrideBoard("ESP32_DEV")            // Still force the uppercase board name
+        .SetConfig(detectedConfig.c_str())     // Automatically passes "4MB", "8MB", "16MB", etc.
+        .AllowDowngrades(true)                 // <--- allow downgrading to lower versions
+        .CheckForOTAUpdate(live_url.c_str(), VERSION, ESP32OTAPull::UPDATE_AND_BOOT);
         
     Serial.printf("[OTA] Process finished. Result code: %d\n", ret);
 

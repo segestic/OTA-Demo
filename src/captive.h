@@ -16,12 +16,10 @@ private:
     bool portalActive;
     const byte DNS_PORT = 53;
 
-    // --- INDUSTRIAL ADDITIONS FOR SAFE NVS WRITES ---
     bool pendingSave = false;
     unsigned long saveTriggerTime = 0;
     String pendingSSID = "";
     String pendingPASS = "";
-    // ------------------------------------------------
 
     void startPortal() {
         portalActive = true;
@@ -32,6 +30,7 @@ private:
 
         dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
 
+        // The SETUP Page
         server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
             String html = "<html><head><meta name='viewport' content='width=device-width, initial-scale=1'>"
                           "<style>body{font-family:sans-serif;text-align:center;background:#f4f4f9;padding-top:50px;} "
@@ -47,18 +46,10 @@ private:
             request->send(200, "text/html", html);
         });
 
-        // ---------------------------------------------------------
-        // INDUSTRIAL RULE: No Flash Writes in Async Callbacks!
-        // ---------------------------------------------------------
         server.on("/save", HTTP_POST, [this](AsyncWebServerRequest *request){
-            // 1. Grab the variables into RAM
             this->pendingSSID = request->arg("ssid");
             this->pendingPASS = request->arg("pass");
-            
-            // 2. Send the HTTP response immediately so the user's phone doesn't hang
             request->send(200, "text/plain", "Credentials Received! Device will now reboot and connect.");
-            
-            // 3. Set the flag to process the save safely in the main thread
             this->pendingSave = true;
             this->saveTriggerTime = millis();
         });
@@ -68,13 +59,13 @@ private:
         });
 
         server.begin();
-        Serial.println("[SYSTEM] Captive Portal Web Server Started.");
     }
 
 public:
     CaptiveManager() : server(80), portalActive(false) {}
 
-    void begin() {
+    // We now pass the VERSION string into this function
+    void begin(String currentVersion) {
         preferences.begin("wifi_creds", true); 
         String savedSSID = preferences.getString("ssid", "");
         String savedPASS = preferences.getString("pass", "");
@@ -98,38 +89,50 @@ public:
             if (WiFi.status() == WL_CONNECTED) {
                 Serial.println("\n[SYSTEM] Wi-Fi Connected. IP: " + WiFi.localIP().toString());
                 
+                // ---------------------------------------------------------
+                // NEW: The Commercial Web Dashboard (Visible on Home Network)
+                // ---------------------------------------------------------
+                server.on("/", HTTP_GET, [currentVersion](AsyncWebServerRequest *request){
+                    String html = "<html><head><meta name='viewport' content='width=device-width, initial-scale=1'>"
+                                  "<style>body{font-family:sans-serif;text-align:center;background:#2c3e50;color:white;padding-top:40px;} "
+                                  "h1{color:#ecf0f1;} .version-box{background:#34495e;padding:20px;border-radius:10px;display:inline-block;margin:20px 0;}"
+                                  ".ver-text{font-size:36px;color:#2ecc71;font-weight:bold;margin:0;} "
+                                  "button{background:#3498db;color:white;padding:15px 30px;font-size:18px;border:none;border-radius:5px;cursor:pointer;transition:0.3s;}"
+                                  "button:hover{background:#2980b9;}</style></head>"
+                                  "<body><h1>Commercial OTA Demo</h1>"
+                                  "<p>Welcome to your automated fleet management system.</p>"
+                                  "<div class='version-box'><p style='margin:0 0 10px 0;'>Current Firmware</p>"
+                                  "<p class='ver-text'>v" + currentVersion + "</p></div><br>"
+                                  "<button onclick=\"fetch('/update').then(()=>alert('Update triggered! Check device LEDs/Serial Monitor.'));\">Check for Updates</button>"
+                                  "</body></html>";
+                    request->send(200, "text/html", html);
+                });
+
+                // The hidden API endpoint the button triggers
                 server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request){
                     triggerOtaCheck = true; 
-                    request->send(200, "text/plain", "OTA Check triggered.");
+                    request->send(200, "text/plain", "OK");
                 });
+
                 server.begin();
+                Serial.println("[SYSTEM] Commercial Dashboard Started.");
             } else {
-                Serial.println("\n[SYSTEM] Wi-Fi connection failed! Password changed or router offline.");
+                Serial.println("\n[SYSTEM] Wi-Fi connection failed! Falling back to setup.");
                 WiFi.disconnect();
                 startPortal();
             }
         }
     }
 
-    // This runs constantly in the main loop()
     void handle() {
         if (portalActive) {
             dnsServer.processNextRequest();
         }
 
-        // ---------------------------------------------------------
-        // INDUSTRIAL RULE: Safe Flash Execution
-        // Wait 1000ms after the user clicks "Connect" before writing to NVS.
-        // This ensures the HTTP 200 OK packet actually leaves the Wi-Fi antenna!
-        // ---------------------------------------------------------
         if (pendingSave && (millis() - saveTriggerTime > 1000)) {
-            pendingSave = false; // Prevent it from running twice
-
-            // 1. Turn off DNS to quiet the Wi-Fi radio and prevent interrupts
+            pendingSave = false; 
             dnsServer.stop();
             
-            // 2. Safe to write to Flash now on the main CPU core
-            Serial.println("[SYSTEM] Safely writing credentials to NVS...");
             Preferences prefs;
             prefs.begin("wifi_creds", false);
             prefs.putString("ssid", pendingSSID);
@@ -138,7 +141,7 @@ public:
 
             Serial.println("[SYSTEM] Saved. Rebooting...");
             delay(500);
-            ESP.restart(); // Reboot into normal Wi-Fi mode
+            ESP.restart(); 
         }
     }
 };

@@ -29,7 +29,7 @@ CaptiveManager captivePortal;
 
 void setupTriggerMode() {
     // 1 line of code replaces the entire hardcoded Wi-Fi setup!
-    captivePortal.begin(); 
+    captivePortal.begin(VERSION);
 }
 
 // ==========================================

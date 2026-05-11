@@ -68,16 +68,16 @@ jobs:
         run: |
           git checkout main
           VERSION=${GITHUB_REF_NAME#v}
-          
-          # NEW: We use the RAW URL instead of the Release URL!
           BIN_URL="https://raw.githubusercontent.com/${{ github.repository }}/main/firmware_4MB.bin"
           
           echo "Updating JSON to Version: $VERSION"
           echo "New URL: $BIN_URL"
           
-          jq --arg ver "$VERSION" --arg url "$BIN_URL" \
+          # ADDED the -c flag right after jq to force a single-line output
+          jq -c --arg ver "$VERSION" --arg url "$BIN_URL" \
              '.Configurations[0].Version = $ver | .Configurations[0].URL = $url' \
              manifest.json > tmp.json && mv tmp.json manifest.json
+             
 
       - name: Commit and Push Updated JSON and Binary
         if: startsWith(github.ref, 'refs/tags/v')

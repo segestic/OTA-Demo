@@ -176,15 +176,21 @@ void setup() {
 
     // ---------------------------------------------------------
     // INDUSTRIAL RULE 3: Task Watchdog Timer (Anti-Freeze)
-    // Initialize Watchdog for a 10-second timeout. If the loop() hangs, 
-    // the system will hardware-reset itself. (Updated for ESP-IDF v5 / Core v3)
+    // Cross-compatible compilation for both Arduino Core v2 and Core v3
     
-    esp_task_wdt_config_t twdt_config = {
-        .timeout_ms = 10000,             // 10 seconds (in milliseconds)
-        .idle_core_mask = (1 << portNUM_PROCESSORS) - 1, // Monitor all available cores
-        .trigger_panic = true            // Hardware reset on timeout
-    };
-    esp_task_wdt_init(&twdt_config); 
+    #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 0, 0)
+        // Modern code for ESP-IDF v5 (Arduino Core v3 - What you have locally)
+        esp_task_wdt_config_t twdt_config = {
+            .timeout_ms = 10000,
+            .idle_core_mask = (1 << portNUM_PROCESSORS) - 1,
+            .trigger_panic = true
+        };
+        esp_task_wdt_init(&twdt_config); 
+    #else
+        // Legacy code for ESP-IDF v4 (Arduino Core v2 - What GitHub Actions is using)
+        esp_task_wdt_init(10, true);
+    #endif
+    
     esp_task_wdt_add(NULL); // Subscribe the main setup/loop task to the WDT
     // ---------------------------------------------------------
 }

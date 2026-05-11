@@ -1,12 +1,16 @@
 name: OTA Firmware CI/CD
 
 on:
+  # 1. Triggers a test build on every normal push to main
   push:
+    branches:
+      - main
+  # 2. Triggers the full OTA Release process when you push a tag
     tags:
-      - 'v*.*.*' # Triggers automatically when you push a tag like 'v1.0.1'
+      - 'v*.*.*' 
 
 permissions:
-  contents: write # Grants the bot permission to create releases and commit code
+  contents: write # Required to create releases and commit the JSON
 
 jobs:
   build-and-release:
@@ -17,10 +21,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Insight from Android Script: Explicitly set Python version
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.11'
 
       - name: Install PlatformIO
         run: |
@@ -28,43 +33,55 @@ jobs:
           pip install platformio
 
       - name: Build Firmware
-        # Note: Change 'esp32dev' if your platformio.ini uses a different environment name
+        env:
+          # Pulls your GitHub Secrets into the build environment
+          SECRET_WIFI_SSID: ${{ secrets.SECRET_WIFI_SSID }}
+          SECRET_WIFI_PASS: ${{ secrets.SECRET_WIFI_PASS }}
         run: pio run -e esp32dev 
 
       - name: Rename and Extract Firmware
         run: |
-          # Grab the compiled .bin and rename it cleanly
           cp .pio/build/esp32dev/firmware.bin firmware_4MB.bin
 
+      # Insight from Android Script: Always save the artifact!
+      # Even if you don't release it, you can download it from the Actions tab.
+      - name: Upload Firmware Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-firmware
+          path: firmware_4MB.bin
+          retention-days: 5
+
+      # =========================================================
+      # ⚠️ THE STEPS BELOW ONLY RUN IF YOU PUSHED A 'v' TAG
+      # =========================================================
+      
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: firmware_4MB.bin
           generate_release_notes: true
 
       - name: Update manifest.json
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          # 1. Strip the 'v' from the tag (e.g., 'v1.0.1' becomes '1.0.1')
           VERSION=${GITHUB_REF_NAME#v}
-          
-          # 2. Construct the exact download URL for the GitHub Release
           BIN_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/firmware_4MB.bin"
           
           echo "Updating JSON to Version: $VERSION"
           echo "New URL: $BIN_URL"
           
-          # 3. Use 'jq' (a JSON command line tool) to rewrite the JSON file
           jq --arg ver "$VERSION" --arg url "$BIN_URL" \
              '.Configurations[0].Version = $ver | .Configurations[0].URL = $url' \
              manifest.json > tmp.json && mv tmp.json manifest.json
 
       - name: Commit and Push Updated JSON
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add manifest.json
-          
-          # Use [skip ci] so pushing this change doesn't trigger another workflow
           git commit -m "chore: update OTA manifest to version ${{ github.ref_name }} [skip ci]"
           git push
           

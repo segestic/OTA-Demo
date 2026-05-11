@@ -124,7 +124,7 @@ void executeOtaPull() {
                 lastPercent = percent;
             }
         })
-        .CheckForOTAUpdate(JSON_URL, VERSION, ESP32OTAPull::UPDATE_AND_BOOT);
+        .CheckForOTAUpdate(JSON_URL, VERSION);
         
     Serial.printf("[OTA] Process finished. Result code: %d\n", ret);
 

@@ -66,33 +66,28 @@ jobs:
       - name: Update manifest.json
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          # 1. Switch out of "Detached HEAD" state and explicitly check out the main branch
           git checkout main
-          
-          # 2. Strip the 'v' from the tag (e.g., 'v1.0.1' becomes '1.0.1')
           VERSION=${GITHUB_REF_NAME#v}
-          BIN_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/firmware_4MB.bin"
+          
+          # NEW: We use the RAW URL instead of the Release URL!
+          BIN_URL="https://raw.githubusercontent.com/${{ github.repository }}/main/firmware_4MB.bin"
           
           echo "Updating JSON to Version: $VERSION"
           echo "New URL: $BIN_URL"
           
-          # 3. Update JSON
           jq --arg ver "$VERSION" --arg url "$BIN_URL" \
              '.Configurations[0].Version = $ver | .Configurations[0].URL = $url' \
              manifest.json > tmp.json && mv tmp.json manifest.json
 
-      - name: Commit and Push Updated JSON
+      - name: Commit and Push Updated JSON and Binary
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
+          # NEW: We commit BOTH the JSON and the physical .bin file directly to the repo
           git add manifest.json
+          git add firmware_4MB.bin 
           
-          # 4. SAFETY CHECK: Only commit if the file actually changed
-          if git diff-index --quiet HEAD; then
-            echo "No changes to manifest.json needed. Skipping commit."
-          else
-            git commit -m "chore: update OTA manifest to version ${{ github.ref_name }} [skip ci]"
-            git push origin main
-          fi
+          git commit -m "chore: release version ${{ github.ref_name }} [skip ci]"
+          git push origin main

@@ -13,7 +13,7 @@
 
 // --- COMMON CONFIGURATION ---
 #define VERSION      "1.0.0"
-#define JSON_URL "https://raw.githubusercontent.com/segestic/repo/main/manifest.json"
+#define JSON_URL "https://raw.githubusercontent.com/segestic/OTA-Demo/main/manifest.json"
 
 // Safe execution flag. NEVER run heavy code inside network/radio callbacks.
 bool triggerOtaCheck = false; 

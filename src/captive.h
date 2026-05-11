@@ -16,10 +16,15 @@ private:
     bool portalActive;
     const byte DNS_PORT = 53;
 
+    // Flags for safe Flash operations
     bool pendingSave = false;
     unsigned long saveTriggerTime = 0;
     String pendingSSID = "";
     String pendingPASS = "";
+
+    // --- NEW: Flag for resetting Wi-Fi ---
+    bool pendingReset = false;
+    unsigned long resetTriggerTime = 0;
 
     void startPortal() {
         portalActive = true;
@@ -64,7 +69,6 @@ private:
 public:
     CaptiveManager() : server(80), portalActive(false) {}
 
-    // We now pass the VERSION string into this function
     void begin(String currentVersion) {
         preferences.begin("wifi_creds", true); 
         String savedSSID = preferences.getString("ssid", "");
@@ -72,7 +76,7 @@ public:
         preferences.end();
 
         if (savedSSID == "") {
-            Serial.println("[SYSTEM] No Wi-Fi credentials found.");
+            Serial.println("[SYSTEM] No Wi-Fi credentials found. Entering Setup Mode.");
             startPortal();
         } else {
             Serial.println("[SYSTEM] Connecting to Wi-Fi: " + savedSSID);
@@ -90,28 +94,41 @@ public:
                 Serial.println("\n[SYSTEM] Wi-Fi Connected. IP: " + WiFi.localIP().toString());
                 
                 // ---------------------------------------------------------
-                // NEW: The Commercial Web Dashboard (Visible on Home Network)
+                // UPDATED: The Commercial Web Dashboard
                 // ---------------------------------------------------------
                 server.on("/", HTTP_GET, [currentVersion](AsyncWebServerRequest *request){
                     String html = "<html><head><meta name='viewport' content='width=device-width, initial-scale=1'>"
                                   "<style>body{font-family:sans-serif;text-align:center;background:#2c3e50;color:white;padding-top:40px;} "
                                   "h1{color:#ecf0f1;} .version-box{background:#34495e;padding:20px;border-radius:10px;display:inline-block;margin:20px 0;}"
                                   ".ver-text{font-size:36px;color:#2ecc71;font-weight:bold;margin:0;} "
-                                  "button{background:#3498db;color:white;padding:15px 30px;font-size:18px;border:none;border-radius:5px;cursor:pointer;transition:0.3s;}"
-                                  "button:hover{background:#2980b9;}</style></head>"
-                                  "<body><h1>Commercial OTA Demo</h1>"
-                                  "<p>Welcome to your automated fleet management system.</p>"
+                                  "button{background:#3498db;color:white;padding:15px 30px;font-size:18px;border:none;border-radius:5px;cursor:pointer;transition:0.3s; margin: 10px;}"
+                                  "button:hover{background:#2980b9;} "
+                                  ".btn-danger{background:#e74c3c;} .btn-danger:hover{background:#c0392b;}</style></head>"
+                                  "<body><h1>Device Dashboard</h1>"
                                   "<div class='version-box'><p style='margin:0 0 10px 0;'>Current Firmware</p>"
                                   "<p class='ver-text'>v" + currentVersion + "</p></div><br>"
-                                  "<button onclick=\"fetch('/update').then(()=>alert('Update triggered! Check device LEDs/Serial Monitor.'));\">Check for Updates</button>"
+                                  
+                                  // Update Button
+                                  "<button onclick=\"fetch('/update').then(()=>alert('Update triggered! Check device LEDs/Serial.'));\">Check for Updates</button><br>"
+                                  
+                                  // NEW: Reset Wi-Fi Button with JavaScript Confirmation
+                                  "<button class='btn-danger' onclick=\"if(confirm('Are you sure? This will disconnect the device from Wi-Fi and reboot into Setup Mode.')) { fetch('/reset-wifi').then(()=>alert('Rebooting... Look for the ESP32_Commercial_Setup network.')); }\">Reset Wi-Fi</button>"
+                                  
                                   "</body></html>";
                     request->send(200, "text/html", html);
                 });
 
-                // The hidden API endpoint the button triggers
+                // OTA Endpoint
                 server.on("/update", HTTP_GET, [](AsyncWebServerRequest *request){
                     triggerOtaCheck = true; 
                     request->send(200, "text/plain", "OK");
+                });
+
+                // NEW: Reset Wi-Fi Endpoint
+                server.on("/reset-wifi", HTTP_GET, [this](AsyncWebServerRequest *request){
+                    request->send(200, "text/plain", "Resetting...");
+                    this->pendingReset = true;
+                    this->resetTriggerTime = millis();
                 });
 
                 server.begin();
@@ -129,6 +146,7 @@ public:
             dnsServer.processNextRequest();
         }
 
+        // Handle Saving New Credentials
         if (pendingSave && (millis() - saveTriggerTime > 1000)) {
             pendingSave = false; 
             dnsServer.stop();
@@ -142,6 +160,20 @@ public:
             Serial.println("[SYSTEM] Saved. Rebooting...");
             delay(500);
             ESP.restart(); 
+        }
+
+        // --- NEW: Handle Resetting Credentials ---
+        if (pendingReset && (millis() - resetTriggerTime > 1000)) {
+            pendingReset = false;
+            
+            Preferences prefs;
+            prefs.begin("wifi_creds", false);
+            prefs.clear(); // Wipes all keys in the "wifi_creds" namespace
+            prefs.end();
+
+            Serial.println("[SYSTEM] Wi-Fi Credentials wiped! Rebooting into Captive Portal...");
+            delay(500);
+            ESP.restart();
         }
     }
 };

@@ -1,0 +1,10 @@
+{
+  "Configurations": [
+    {
+      "Board": "ESP32_DEV",
+      "Config": "4MB",
+      "Version": "1.0.3",
+      "URL": "https://github.com/segestic/OTA-Demo/releases/download/v1.0.3/firmware_4MB.bin"
+    }
+  ]
+}

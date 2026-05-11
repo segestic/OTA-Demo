@@ -85,9 +85,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
-          # NEW: We commit BOTH the JSON and the physical .bin file directly to the repo
+          # Force add the binary to override the .gitignore file!
           git add manifest.json
-          git add firmware_4MB.bin 
+          git add -f firmware_4MB.bin 
           
           git commit -m "chore: release version ${{ github.ref_name }} [skip ci]"
           git push origin main

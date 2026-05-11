@@ -12,7 +12,7 @@
 // ==========================================
 
 // --- COMMON CONFIGURATION ---
-#define VERSION      "1.0.7"
+#define VERSION      "1.0.8"
 #define JSON_URL "https://raw.githubusercontent.com/segestic/OTA-Demo/main/manifest.json"
 
 // Safe execution flag. NEVER run heavy code inside network/radio callbacks.
@@ -134,7 +134,7 @@ void executeOtaPull() {
             }
         })
         .OverrideBoard("ESP32_DEV")            // Still force the uppercase board name
-        .SetConfig(detectedConfig.c_str())     // Automatically passes "4MB", "8MB", "16MB", etc.
+        .SetConfig("4MB") //SetConfig(detectedConfig.c_str())     // Automatically passes "4MB", "8MB", "16MB", etc.
         .AllowDowngrades(true)                 // <--- allow downgrading to lower versions
         .CheckForOTAUpdate(live_url.c_str(), VERSION, ESP32OTAPull::UPDATE_AND_BOOT);
         

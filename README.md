@@ -52,9 +52,26 @@ Once the initial firmware is flashed via USB, you can use the OTA pipeline to pu
 
 4. **Device Pull:** The ESP32 reads the JSON manifest. If the server's version number is higher than the device's current version, the ESP32 automatically downloads the binary file, writes it to its flash memory, and reboots.
 
+## Status & Error Codes
+
+When the device checks for an update, the OTA process returns a specific status code. You can use these codes to troubleshoot issues or trigger specific behaviors in your application.
+
+| Code | Constant | Description |
+| --- | --- | --- |
+| `0` | `UPDATE_OK` | The update was successfully downloaded and written to flash memory. |
+| `-1` | `NO_UPDATE_AVAILABLE` | A matching profile was found in the manifest, but the device is already running this version (or newer). |
+| `-2` | `NO_UPDATE_PROFILE_FOUND` | The manifest was downloaded, but no configuration matched the device's specific `Board`, `Config`, or MAC address. |
+| `-3` | `UPDATE_AVAILABLE` | A new update is available on the server, but the device was explicitly instructed to only check, not download. |
+| `1` | `HTTP_FAILED` | Failed to connect to the server or download the file (e.g., URL is incorrect or server is down). |
+| `2` | `WRITE_ERROR` | The file downloaded, but the device failed to write it to its internal flash memory. |
+| `3` | `JSON_PROBLEM` | The manifest file could not be parsed. This is usually caused by invalid JSON formatting, invisible whitespace characters, or trailing commas. |
+| `4` | `OTA_UPDATE_FAIL` | A partition error occurred. Ensure your ESP32 is using a partition scheme that supports OTA (e.g., "Default 4MB with spiffs"). |
+
 ## Acknowledgments
 
 * [ESP32OTAPull Library](https://www.google.com/search?q=https://github.com/mottramlabs/ESP32OTAPull) - The core library handling the JSON parsing and binary download process.
+
+
 
 ```
 
